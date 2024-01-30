@@ -1,0 +1,71 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+
+Vagrant.configure("2") do |config|
+  PROXY_ENABLE		= true
+  PROXY_HTTP		= "http://10.20.5.51:8888"
+  PROXY_HTTPS		= "http://10.20.5.51:8888"
+  PROXY_EXCLUDE 	= "localhost,127.0.0.1"
+  BOX_NAME			= "ubuntu/jammy64"
+  WEB_IP			= "10.10.20.10"
+  DB_IP				= "10.10.20.11"
+  WEB_HOSTONLY		= "192.168.56.10"
+
+  
+  if not Vagrant.has_plugin?("vagrant-proxyconf")
+	PROXY_ENABLE == false
+	config.vm.post_up_message = "Proxy config plugin not present, proxy instructions will be ignored"
+	config.vm.post_up_message = "Install plugin with command: vagrant plugin install vagrant-proxyconf"
+  end 
+  
+	config.vm.define "web" do |webconfig|
+		webconfig.vm.box = BOX_NAME
+		webconfig.vm.hostname = "web"
+		webconfig.vm.network :private_network, ip: WEB_IP, virtualbox__intnet: true
+		webconfig.vm.network :private_network, ip: WEB_HOSTONLY
+		webconfig.ssh.insert_key = false
+
+		if PROXY_ENABLE == true
+			webconfig.vm.post_up_message = "setting proxy config"
+			webconfig.proxy.http     = PROXY_HTTP
+			webconfig.proxy.https    = PROXY_HTTPS
+			webconfig.proxy.no_proxy = PROXY_EXCLUDE 
+		end
+	
+		webconfig.vm.provider "virtualbox" do |vb|
+			vb.name = "m340_web"
+			vb.memory = "2048"
+			vb.cpus = 2
+		end		
+		
+		webconfig.vm.provision "shell", path: "./scripts/provision_web.sh"
+		webconfig.vm.synced_folder "./www/", "/var/www/html"	
+	
+	end	
+	
+	config.vm.define "db" do |dbconfig|
+		dbconfig.vm.box = BOX_NAME
+		dbconfig.vm.hostname = "db"
+
+		if PROXY_ENABLE == true
+			dbconfig.vm.post_up_message = "setting proxy config"
+			dbconfig.proxy.http     = PROXY_HTTP
+			dbconfig.proxy.https    = PROXY_HTTPS
+			dbconfig.proxy.no_proxy = PROXY_EXCLUDE 
+		end
+
+		dbconfig.vm.network :private_network, ip: DB_IP, virtualbox__intnet: true
+		dbconfig.vm.network "forwarded_port", guest: 3306, host: 3306
+		dbconfig.ssh.insert_key = false
+		
+		dbconfig.vm.provider "virtualbox" do |vb|
+			vb.name = "m340_db"
+			vb.memory = "1024"
+			vb.cpus = 1
+		end			
+		
+		dbconfig.vm.provision "shell", path: "./scripts/provision_db.sh"
+	
+	end
+end
